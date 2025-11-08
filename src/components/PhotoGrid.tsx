@@ -23,7 +23,11 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
       (entries) => {
         entries.forEach((entry) => {
           if (entry.isIntersecting) {
-            setVisibleImages((prev) => new Set([...prev, entry.target.id]))
+            setVisibleImages((prev) => {
+              const newSet = new Set(prev)
+              newSet.add(entry.target.id)
+              return newSet
+            })
           }
         })
       },
