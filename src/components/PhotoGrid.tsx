@@ -1,13 +1,16 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
 
 interface Photo {
   id: string
   url: string
   alt: string | null
   order: number
+  mobileRowType?: string | null
+  mobileRowOrder?: number | null
+  mobilePosition?: number | null
+  aspectRatio?: string | null
 }
 
 interface PhotoGridProps {
@@ -15,7 +18,7 @@ interface PhotoGridProps {
 }
 
 interface ImageWithDimensions extends Photo {
-  aspectRatio: number
+  calculatedAspectRatio: number
   width: number
   height: number
 }
@@ -24,8 +27,19 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
   const [visibleImages, setVisibleImages] = useState<Set<string>>(new Set())
   const [imagesWithDimensions, setImagesWithDimensions] = useState<ImageWithDimensions[]>([])
   const [containerWidth, setContainerWidth] = useState(0)
+  const [isMobile, setIsMobile] = useState(false)
   const observerRef = useRef<IntersectionObserver | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Detect if mobile
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    checkMobile()
+    window.addEventListener('resize', checkMobile)
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   // Load image dimensions
   useEffect(() => {
@@ -38,7 +52,7 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
               ...image,
               width: img.naturalWidth,
               height: img.naturalHeight,
-              aspectRatio: img.naturalWidth / img.naturalHeight,
+              calculatedAspectRatio: img.naturalWidth / img.naturalHeight,
             })
           }
           img.onerror = () => {
@@ -47,7 +61,7 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
               ...image,
               width: 1600,
               height: 900,
-              aspectRatio: 16 / 9,
+              calculatedAspectRatio: 16 / 9,
             })
           }
           img.src = image.url
@@ -110,19 +124,42 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
         observerRef.current.observe(el)
       }
     })
-  }, [imagesWithDimensions])
+  }, [imagesWithDimensions, isMobile])
 
-  // Group images into rows that fill the screen width
-  const groupImagesIntoRows = () => {
+  // Group images into mobile rows
+  const getMobileRows = () => {
+    if (imagesWithDimensions.length === 0) return []
+
+    // Group by mobileRowOrder
+    const rowMap = new Map<number, ImageWithDimensions[]>()
+
+    imagesWithDimensions.forEach((img) => {
+      const rowOrder = img.mobileRowOrder ?? 0
+      if (!rowMap.has(rowOrder)) {
+        rowMap.set(rowOrder, [])
+      }
+      rowMap.get(rowOrder)!.push(img)
+    })
+
+    // Sort each row by mobilePosition
+    const rows = Array.from(rowMap.values()).map((row) => {
+      return row.sort((a, b) => (a.mobilePosition ?? 0) - (b.mobilePosition ?? 0))
+    })
+
+    return rows
+  }
+
+  // Group images into desktop rows that fill the screen width
+  const getDesktopRows = () => {
     if (imagesWithDimensions.length === 0 || containerWidth === 0) return []
 
-    const rowHeight = containerWidth < 768 ? 200 : 300
+    const rowHeight = 300
     const rows: ImageWithDimensions[][] = []
     let currentRow: ImageWithDimensions[] = []
     let currentRowWidth = 0
 
     imagesWithDimensions.forEach((image) => {
-      const imageWidth = rowHeight * image.aspectRatio
+      const imageWidth = rowHeight * image.calculatedAspectRatio
 
       if (currentRowWidth + imageWidth <= containerWidth) {
         currentRow.push(image)
@@ -143,49 +180,92 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
     return rows
   }
 
-  const rows = groupImagesIntoRows()
+  const rows = isMobile ? getMobileRows() : getDesktopRows()
+
+  // Render mobile row
+  const renderMobileRow = (row: ImageWithDimensions[], rowIndex: number) => {
+    if (row.length === 0) return null
+
+    const rowType = row[0].mobileRowType
+
+    return (
+      <div key={rowIndex} className="w-full flex gap-0">
+        {row.map((image) => {
+          const globalIndex = images.findIndex((img) => img.id === image.id)
+
+          // Calculate width based on aspect ratio
+          let widthPercent = '100%'
+          if (rowType === '1:1-9:16' || rowType === '1:1-1:1' || rowType === '9:16-9:16' || rowType === '16:9-9:16') {
+            widthPercent = '50%'
+          }
+
+          return (
+            <div
+              key={image.id}
+              id={image.id}
+              className={`photo-item overflow-hidden group cursor-pointer transition-all duration-600 ${
+                visibleImages.has(image.id) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
+              }`}
+              style={{
+                transitionDelay: `${globalIndex * 50}ms`,
+                width: widthPercent,
+                aspectRatio: image.aspectRatio || '16/9',
+                flex: '0 0 auto',
+              }}
+            >
+              <img
+                src={image.url}
+                alt={image.alt || 'Photography'}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
+
+  // Render desktop row
+  const renderDesktopRow = (row: ImageWithDimensions[], rowIndex: number) => {
+    const totalAspectRatio = row.reduce((sum, img) => sum + img.calculatedAspectRatio, 0)
+    const scaledHeight = containerWidth / totalAspectRatio
+
+    return (
+      <div key={rowIndex} className="flex w-full" style={{ height: `${scaledHeight}px` }}>
+        {row.map((image) => {
+          const width = scaledHeight * image.calculatedAspectRatio
+          const globalIndex = images.findIndex((img) => img.id === image.id)
+
+          return (
+            <div
+              key={image.id}
+              id={image.id}
+              className={`photo-item overflow-hidden group cursor-pointer transition-all duration-600 ${
+                visibleImages.has(image.id) ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'
+              }`}
+              style={{
+                transitionDelay: `${globalIndex * 50}ms`,
+                width: `${width}px`,
+                height: `${scaledHeight}px`,
+                flex: '0 0 auto',
+              }}
+            >
+              <img
+                src={image.url}
+                alt={image.alt || 'Photography'}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+              />
+            </div>
+          )
+        })}
+      </div>
+    )
+  }
 
   return (
     <section className="bg-black overflow-hidden w-full">
       <div className="w-full" ref={containerRef}>
-        {rows.map((row, rowIndex) => {
-          const rowHeight = containerWidth < 768 ? 200 : 300
-          const totalAspectRatio = row.reduce((sum, img) => sum + img.aspectRatio, 0)
-          const scaledHeight = containerWidth / totalAspectRatio
-
-          return (
-            <div key={rowIndex} className="flex w-full" style={{ height: `${scaledHeight}px` }}>
-              {row.map((image, imageIndex) => {
-                const width = scaledHeight * image.aspectRatio
-                const globalIndex = images.findIndex(img => img.id === image.id)
-
-                return (
-                  <div
-                    key={image.id}
-                    id={image.id}
-                    className={`photo-item overflow-hidden group cursor-pointer transition-all duration-600 ${
-                      visibleImages.has(image.id)
-                        ? 'opacity-100 translate-y-0'
-                        : 'opacity-0 translate-y-12'
-                    }`}
-                    style={{
-                      transitionDelay: `${globalIndex * 50}ms`,
-                      width: `${width}px`,
-                      height: `${scaledHeight}px`,
-                      flex: '0 0 auto',
-                    }}
-                  >
-                    <img
-                      src={image.url}
-                      alt={image.alt || 'Photography'}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                    />
-                  </div>
-                )
-              })}
-            </div>
-          )
-        })}
+        {rows.map((row, rowIndex) => (isMobile ? renderMobileRow(row, rowIndex) : renderDesktopRow(row, rowIndex)))}
       </div>
     </section>
   )

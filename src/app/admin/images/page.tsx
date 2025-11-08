@@ -21,6 +21,10 @@ export default function ImagesAdmin() {
     url: '',
     order: 0,
   })
+  const [mobileRowType, setMobileRowType] = useState<string>('16:9-single')
+  const [rowImages, setRowImages] = useState<Array<{url: string, aspectRatio: string}>>([
+    { url: '', aspectRatio: '16:9' }
+  ])
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editOrder, setEditOrder] = useState<number>(0)
 
@@ -40,26 +44,78 @@ export default function ImagesAdmin() {
     }
   }
 
+  const handleRowTypeChange = (newRowType: string) => {
+    setMobileRowType(newRowType)
+
+    // Update rowImages array based on selected row type
+    switch (newRowType) {
+      case '16:9-single':
+        setRowImages([{ url: '', aspectRatio: '16:9' }])
+        break
+      case '1:1-9:16':
+        setRowImages([
+          { url: '', aspectRatio: '1:1' },
+          { url: '', aspectRatio: '9:16' }
+        ])
+        break
+      case '1:1-1:1':
+        setRowImages([
+          { url: '', aspectRatio: '1:1' },
+          { url: '', aspectRatio: '1:1' }
+        ])
+        break
+      case '9:16-9:16':
+        setRowImages([
+          { url: '', aspectRatio: '9:16' },
+          { url: '', aspectRatio: '9:16' }
+        ])
+        break
+      case '16:9-9:16':
+        setRowImages([
+          { url: '', aspectRatio: '16:9' },
+          { url: '', aspectRatio: '9:16' }
+        ])
+        break
+    }
+  }
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     try {
-      const res = await fetch('/api/images', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...formData,
-          alt: null,
-          title: null,
-          category: null,
-          featured: false,
-        }),
-      })
+      // Get the highest mobile row order
+      const maxRowOrder = images.reduce((max, img: any) => {
+        return img.mobileRowOrder > max ? img.mobileRowOrder : max
+      }, 0)
 
-      if (res.ok) {
-        setShowCreateModal(false)
-        setFormData({ url: '', order: 0 })
-        fetchImages()
-      }
+      // Create all images in the row
+      const promises = rowImages.map((imgData, index) => {
+        if (!imgData.url) return null
+
+        return fetch('/api/images', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            url: imgData.url,
+            order: formData.order + index,
+            alt: null,
+            title: null,
+            category: null,
+            featured: false,
+            mobileRowType,
+            mobileRowOrder: maxRowOrder + 1,
+            mobilePosition: index,
+            aspectRatio: imgData.aspectRatio,
+          }),
+        })
+      }).filter(Boolean)
+
+      await Promise.all(promises)
+
+      setShowCreateModal(false)
+      setFormData({ url: '', order: 0 })
+      setMobileRowType('16:9-single')
+      setRowImages([{ url: '', aspectRatio: '16:9' }])
+      fetchImages()
     } catch (error) {
       console.error('Error creating image:', error)
     }
@@ -203,27 +259,56 @@ export default function ImagesAdmin() {
 
       {/* Create Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-8 max-w-md w-full text-gray-900">
-            <h2 className="text-2xl font-bold mb-4 text-gray-900">Add New Image</h2>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-y-auto">
+          <div className="bg-white rounded-lg p-8 max-w-2xl w-full text-gray-900 my-8">
+            <h2 className="text-2xl font-bold mb-4 text-gray-900">Add New Mobile Row</h2>
             <form onSubmit={handleCreate}>
               <div className="space-y-4">
+                {/* Row Type Selector */}
                 <div>
-                  <label className="label">Image URL</label>
-                  <input
-                    type="url"
-                    required
-                    value={formData.url}
-                    onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                  <label className="label">Mobile Row Template</label>
+                  <select
+                    value={mobileRowType}
+                    onChange={(e) => handleRowTypeChange(e.target.value)}
                     className="input-field"
-                    placeholder="https://example.com/image.jpg"
-                  />
+                  >
+                    <option value="16:9-single">1x Horizontal (16:9)</option>
+                    <option value="1:1-9:16">1x Square (1:1) + 1x Vertical (9:16)</option>
+                    <option value="1:1-1:1">2x Square (1:1)</option>
+                    <option value="9:16-9:16">2x Vertical (9:16)</option>
+                    <option value="16:9-9:16">1x Horizontal (16:9) + 1x Vertical (9:16)</option>
+                  </select>
                   <p className="text-xs text-gray-500 mt-1">
-                    Use Cloudinary, Unsplash, or any image hosting service
+                    Select how images should be arranged in this row on mobile
                   </p>
                 </div>
+
+                {/* Dynamic Image Inputs */}
+                {rowImages.map((imgData, index) => (
+                  <div key={index} className="p-4 bg-gray-50 rounded border border-gray-200">
+                    <label className="label">
+                      Image {index + 1} - {imgData.aspectRatio} ratio
+                    </label>
+                    <input
+                      type="url"
+                      required
+                      value={imgData.url}
+                      onChange={(e) => {
+                        const newRowImages = [...rowImages]
+                        newRowImages[index].url = e.target.value
+                        setRowImages(newRowImages)
+                      }}
+                      className="input-field"
+                      placeholder="https://example.com/image.jpg"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Image will be cropped/displayed as {imgData.aspectRatio}
+                    </p>
+                  </div>
+                ))}
+
                 <div>
-                  <label className="label">Order</label>
+                  <label className="label">Desktop Order (optional)</label>
                   <input
                     type="number"
                     value={formData.order}
@@ -234,19 +319,21 @@ export default function ImagesAdmin() {
                     placeholder="0"
                   />
                   <p className="text-xs text-gray-500 mt-1">
-                    Lower numbers appear first
+                    Order for desktop layout (lower numbers first)
                   </p>
                 </div>
               </div>
               <div className="flex gap-3 mt-6">
                 <button type="submit" className="btn-primary flex-1">
-                  Add Image
+                  Add Row
                 </button>
                 <button
                   type="button"
                   onClick={() => {
                     setShowCreateModal(false)
                     setFormData({ url: '', order: 0 })
+                    setMobileRowType('16:9-single')
+                    setRowImages([{ url: '', aspectRatio: '16:9' }])
                   }}
                   className="btn-secondary flex-1"
                 >

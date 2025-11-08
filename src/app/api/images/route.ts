@@ -42,6 +42,10 @@ export async function POST(request: NextRequest) {
       category,
       tags,
       featured,
+      mobileRowType,
+      mobileRowOrder,
+      mobilePosition,
+      aspectRatio,
     } = body
 
     if (!url) {
@@ -61,6 +65,10 @@ export async function POST(request: NextRequest) {
         category: category || null,
         tags: tags || [],
         featured: featured ?? false,
+        mobileRowType: mobileRowType || null,
+        mobileRowOrder: mobileRowOrder ?? null,
+        mobilePosition: mobilePosition ?? null,
+        aspectRatio: aspectRatio || null,
       },
     })
 
