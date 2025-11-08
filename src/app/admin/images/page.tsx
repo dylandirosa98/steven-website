@@ -118,6 +118,22 @@ export default function ImagesAdmin() {
         </button>
       </div>
 
+      {/* Aspect Ratio Info */}
+      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <h3 className="font-semibold text-blue-900 mb-2">Recommended Aspect Ratios</h3>
+        <p className="text-sm text-blue-800 mb-2">
+          For best results, use images with these aspect ratios:
+        </p>
+        <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
+          <li><strong>16:9</strong> - Horizontal/Landscape (e.g., 1920x1080, 1600x900)</li>
+          <li><strong>9:16</strong> - Vertical/Portrait (e.g., 1080x1920, 900x1600)</li>
+          <li><strong>1:1</strong> - Square (e.g., 1080x1080, 1000x1000)</li>
+        </ul>
+        <p className="text-xs text-blue-700 mt-2">
+          The layout automatically scales images to fill rows perfectly on all screen sizes.
+        </p>
+      </div>
+
       <div className="space-y-4">
         {images
           .sort((a, b) => a.order - b.order)
