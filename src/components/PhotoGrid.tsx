@@ -196,24 +196,23 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
       return 16 / 9 // default
     }
 
-    // Calculate width percentages for multi-image rows
-    const calculateWidthPercentages = () => {
-      if (rowType === '16:9-single') {
-        return ['100%']
-      }
-
+    // For mobile rows, calculate height based on screen width and aspect ratios
+    const calculateRowHeight = () => {
       const aspectRatios = row.map(img => getAspectRatioValue(img.aspectRatio))
       const totalRatio = aspectRatios.reduce((sum, ratio) => sum + ratio, 0)
 
-      return aspectRatios.map(ratio => `${(ratio / totalRatio) * 100}%`)
+      // Height = width / totalAspectRatio
+      return containerWidth / totalRatio
     }
 
-    const widthPercentages = calculateWidthPercentages()
+    const rowHeight = calculateRowHeight()
 
     return (
-      <div key={rowIndex} className="w-full flex gap-0">
+      <div key={rowIndex} className="w-full flex gap-0" style={{ height: `${rowHeight}px` }}>
         {row.map((image, imageIndex) => {
           const globalIndex = images.findIndex((img) => img.id === image.id)
+          const aspectRatioValue = getAspectRatioValue(image.aspectRatio)
+          const imageWidth = rowHeight * aspectRatioValue
 
           return (
             <div
@@ -224,8 +223,8 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
               }`}
               style={{
                 transitionDelay: `${globalIndex * 50}ms`,
-                width: widthPercentages[imageIndex],
-                aspectRatio: image.aspectRatio || '16/9',
+                width: `${imageWidth}px`,
+                height: `${rowHeight}px`,
                 flex: '0 0 auto',
               }}
             >
