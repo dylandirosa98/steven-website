@@ -188,16 +188,32 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
 
     const rowType = row[0].mobileRowType
 
+    // Calculate proportional widths based on aspect ratios
+    const getAspectRatioValue = (aspectRatio: string | null | undefined): number => {
+      if (aspectRatio === '16:9') return 16 / 9
+      if (aspectRatio === '9:16') return 9 / 16
+      if (aspectRatio === '1:1') return 1
+      return 16 / 9 // default
+    }
+
+    // Calculate width percentages for multi-image rows
+    const calculateWidthPercentages = () => {
+      if (rowType === '16:9-single') {
+        return ['100%']
+      }
+
+      const aspectRatios = row.map(img => getAspectRatioValue(img.aspectRatio))
+      const totalRatio = aspectRatios.reduce((sum, ratio) => sum + ratio, 0)
+
+      return aspectRatios.map(ratio => `${(ratio / totalRatio) * 100}%`)
+    }
+
+    const widthPercentages = calculateWidthPercentages()
+
     return (
       <div key={rowIndex} className="w-full flex gap-0">
-        {row.map((image) => {
+        {row.map((image, imageIndex) => {
           const globalIndex = images.findIndex((img) => img.id === image.id)
-
-          // Calculate width based on aspect ratio
-          let widthPercent = '100%'
-          if (rowType === '1:1-9:16' || rowType === '1:1-1:1' || rowType === '9:16-9:16' || rowType === '16:9-9:16') {
-            widthPercent = '50%'
-          }
 
           return (
             <div
@@ -208,7 +224,7 @@ export default function PhotoGrid({ images }: PhotoGridProps) {
               }`}
               style={{
                 transitionDelay: `${globalIndex * 50}ms`,
-                width: widthPercent,
+                width: widthPercentages[imageIndex],
                 aspectRatio: image.aspectRatio || '16/9',
                 flex: '0 0 auto',
               }}
